@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FŌTŌ — 사진 공유</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0c0c0c;
+    --surface: #161616;
+    --surface2: #1f1f1f;
+    --border: #2a2a2a;
+    --accent: #e8d5b0;
+    --accent2: #c9a96e;
+    --text: #f0ece4;
+    --text-dim: #8a8680;
+    --danger: #e07070;
+    --success: #7ec899;
+    --radius: 12px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* ─── NOISE TEXTURE ─── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.6;
+  }
+
+  .wrap { position: relative; z-index: 1; max-width: 960px; margin: 0 auto; padding: 0 24px; }
+
+  /* ─── HEADER ─── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 0;
+  }
+  header .wrap { display: flex; align-items: center; justify-content: space-between; }
+  .logo {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.6rem;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+  }
+  .logo span { font-style: italic; color: var(--accent2); }
+  .header-sub { font-size: 0.75rem; color: var(--text-dim); letter-spacing: 0.05em; }
+
+  /* ─── HOME PAGE ─── */
+  #page-home {
+    padding: 80px 0 60px;
+  }
+  .hero-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(2.4rem, 6vw, 4.2rem);
+    line-height: 1.1;
+    margin-bottom: 16px;
+  }
+  .hero-title em { font-style: italic; color: var(--accent2); }
+  .hero-sub {
+    font-size: 1rem;
+    color: var(--text-dim);
+    max-width: 480px;
+    margin-bottom: 48px;
+    font-weight: 300;
+  }
+
+  /* ─── UPLOAD ZONE ─── */
+  .upload-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .upload-card-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .step-badge {
+    width: 24px; height: 24px;
+    background: var(--accent);
+    color: var(--bg);
+    border-radius: 50%;
+    font-size: 0.7rem;
+    font-weight: 500;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .upload-card-title { font-size: 0.9rem; font-weight: 500; color: var(--text); }
+  .upload-card-body { padding: 24px; }
+
+  /* Album title input */
+  .field { margin-bottom: 20px; }
+  .field label { display: block; font-size: 0.78rem; color: var(--text-dim); letter-spacing: 0.04em; margin-bottom: 8px; text-transform: uppercase; }
+  .field input[type="text"] {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .field input[type="text"]:focus { border-color: var(--accent2); }
+  .field input[type="text"]::placeholder { color: var(--text-dim); opacity: 0.6; }
+
+  /* Drop zone */
+  #drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 40px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--bg);
+    position: relative;
+  }
+  #drop-zone:hover, #drop-zone.drag-over {
+    border-color: var(--accent2);
+    background: rgba(201, 169, 110, 0.04);
+  }
+  #drop-zone input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; pointer-events: none; }
+  .drop-icon { font-size: 2.4rem; margin-bottom: 12px; opacity: 0.7; }
+  .drop-text { font-size: 0.9rem; color: var(--text-dim); }
+  .drop-text strong { color: var(--accent); font-weight: 500; }
+  .drop-hint { font-size: 0.78rem; color: var(--text-dim); margin-top: 6px; opacity: 0.6; }
+
+  /* Preview grid */
+  #preview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 10px;
+    margin-top: 20px;
+  }
+  .preview-item {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--surface2);
+  }
+  .preview-item img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .preview-remove {
+    position: absolute;
+    top: 4px; right: 4px;
+    width: 22px; height: 22px;
+    background: rgba(0,0,0,0.7);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    font-size: 0.75rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .preview-item:hover .preview-remove { opacity: 1; }
+  .preview-name {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.7));
+    color: white;
+    font-size: 0.62rem;
+    padding: 8px 4px 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Upload button */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    border-radius: 8px;
+    padding: 13px 28px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.02em;
+  }
+  .btn-primary:hover { background: var(--accent2); transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 22px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.88rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-secondary:hover { border-color: var(--accent2); color: var(--accent); }
+
+  .upload-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .file-count { font-size: 0.82rem; color: var(--text-dim); }
+
+  /* ─── PROGRESS ─── */
+  #progress-bar-wrap {
+    background: var(--surface2);
+    border-radius: 100px;
+    height: 4px;
+    overflow: hidden;
+    margin-top: 16px;
+    display: none;
+  }
+  #progress-bar {
+    height: 100%;
+    background: var(--accent2);
+    border-radius: 100px;
+    width: 0%;
+    transition: width 0.3s;
+  }
+  #progress-text { font-size: 0.8rem; color: var(--text-dim); margin-top: 8px; display: none; text-align: center; }
+
+  /* ─── SUCCESS CARD ─── */
+  #link-result {
+    margin-top: 24px;
+    background: rgba(126, 200, 153, 0.08);
+    border: 1px solid rgba(126, 200, 153, 0.2);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    display: none;
+  }
+  .link-result-label { font-size: 0.78rem; color: var(--success); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+  .link-box {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .link-box input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.85rem;
+    outline: none;
+  }
+  .btn-copy {
+    background: var(--success);
+    color: var(--bg);
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .btn-copy:hover { opacity: 0.85; }
+  .btn-copy.copied { background: var(--accent2); }
+  .link-note { font-size: 0.78rem; color: var(--text-dim); margin-top: 10px; }
+
+  /* ─── HOW IT WORKS ─── */
+  .how-section { margin-top: 56px; padding-top: 40px; border-top: 1px solid var(--border); }
+  .how-title { font-family: 'DM Serif Display', serif; font-size: 1.3rem; margin-bottom: 24px; color: var(--accent); }
+  .how-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+  .how-step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .how-step-num { font-size: 1.8rem; font-family: 'DM Serif Display', serif; color: var(--border); margin-bottom: 8px; }
+  .how-step-title { font-size: 0.88rem; font-weight: 500; color: var(--accent); margin-bottom: 6px; }
+  .how-step-desc { font-size: 0.8rem; color: var(--text-dim); line-height: 1.5; }
+
+  /* ─── ALBUM PAGE ─── */
+  #page-album { padding: 48px 0 80px; display: none; }
+
+  .album-header { margin-bottom: 36px; }
+  .album-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    text-decoration: none;
+    cursor: pointer;
+    margin-bottom: 20px;
+    transition: color 0.2s;
+    border: none;
+    background: none;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .album-back:hover { color: var(--accent); }
+  .album-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(1.8rem, 5vw, 3rem);
+    margin-bottom: 8px;
+  }
+  .album-meta { font-size: 0.82rem; color: var(--text-dim); }
+  .album-meta span { color: var(--accent2); }
+
+  .album-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+
+  /* ─── PHOTO GRID ─── */
+  #album-grid {
+    columns: 3 220px;
+    gap: 10px;
+    margin-top: 32px;
+  }
+  .photo-card {
+    break-inside: avoid;
+    margin-bottom: 10px;
+    border-radius: var(--radius);
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    background: var(--surface);
+  }
+  .photo-card img {
+    width: 100%;
+    display: block;
+    transition: transform 0.3s;
+  }
+  .photo-card:hover img { transform: scale(1.03); }
+  .photo-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(transparent 50%, rgba(0,0,0,0.7));
+    opacity: 0;
+    transition: opacity 0.2s;
+    display: flex;
+    align-items: flex-end;
+    padding: 14px;
+    gap: 8px;
+  }
+  .photo-card:hover .photo-overlay { opacity: 1; }
+  .photo-overlay-btn {
+    background: rgba(255,255,255,0.15);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: white;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 0.78rem;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    transition: background 0.15s;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .photo-overlay-btn:hover { background: rgba(255,255,255,0.25); }
+
+  /* ─── LIGHTBOX ─── */
+  #lightbox {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.95);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    padding: 20px;
+  }
+  #lightbox.open { display: flex; }
+  #lightbox img {
+    max-width: 100%;
+    max-height: 80vh;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 20px 80px rgba(0,0,0,0.8);
+  }
+  .lightbox-close {
+    position: absolute;
+    top: 20px; right: 24px;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 50%;
+    width: 36px; height: 36px;
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .lightbox-close:hover { border-color: var(--danger); color: var(--danger); }
+  .lightbox-info {
+    margin-top: 16px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .lightbox-name { font-size: 0.85rem; color: var(--text-dim); }
+  .lightbox-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255,255,255,0.08);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    width: 44px; height: 44px;
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+    backdrop-filter: blur(8px);
+  }
+  .lightbox-nav:hover { background: rgba(255,255,255,0.15); }
+  #lb-prev { left: 16px; }
+  #lb-next { right: 16px; }
+
+  /* ─── LOADING ─── */
+  .loading-spinner {
+    width: 32px; height: 32px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent2);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin: 60px auto;
+    display: none;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ─── TOAST ─── */
+  #toast {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 10px 22px;
+    font-size: 0.85rem;
+    color: var(--text);
+    z-index: 200;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    white-space: nowrap;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.success { border-color: rgba(126, 200, 153, 0.4); color: var(--success); }
+  #toast.error { border-color: rgba(224, 112, 112, 0.4); color: var(--danger); }
+
+  /* ─── ERROR STATE ─── */
+  .error-state {
+    text-align: center;
+    padding: 60px 20px;
+  }
+  .error-state h2 { font-family: 'DM Serif Display', serif; font-size: 1.6rem; margin-bottom: 10px; }
+  .error-state p { color: var(--text-dim); margin-bottom: 24px; }
+
+  /* ─── FOOTER ─── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 24px 0;
+    margin-top: 60px;
+  }
+  footer .wrap { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .footer-note { font-size: 0.75rem; color: var(--text-dim); }
+
+  /* ─── API KEY MODAL ─── */
+  #api-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    z-index: 300;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  #api-modal.open { display: flex; }
+  .api-modal-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    max-width: 480px;
+    width: 100%;
+  }
+  .api-modal-title { font-family: 'DM Serif Display', serif; font-size: 1.4rem; margin-bottom: 8px; color: var(--accent); }
+  .api-modal-desc { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 24px; line-height: 1.6; }
+  .api-modal-desc a { color: var(--accent2); text-decoration: none; }
+  .api-modal-desc a:hover { text-decoration: underline; }
+  .api-modal-steps { background: var(--bg); border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+  .api-modal-step { font-size: 0.82rem; color: var(--text-dim); padding: 4px 0; display: flex; gap: 10px; }
+  .api-modal-step-num { color: var(--accent2); font-weight: 500; flex-shrink: 0; }
+  .api-modal-actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    #album-grid { columns: 2 140px; }
+    .how-steps { grid-template-columns: 1fr 1fr; }
+    .lightbox-nav { display: none; }
+  }
+
+  /* Animations */
+  .fade-in { animation: fadeIn 0.4s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="logo" onclick="showHome()" style="cursor:pointer">FŌ<span>TŌ</span></div>
+    <div class="header-sub">무료 사진 공유</div>
+  </div>
+</header>
+
+<!-- ────────── HOME PAGE ────────── -->
+<div id="page-home">
+  <div class="wrap">
+    <h1 class="hero-title">사진을 올리고<br><em>링크 하나</em>로 공유하세요</h1>
+    <p class="hero-sub">회원가입 없이 사진을 업로드하고, 링크 하나로 누구에게나 공유하세요. 받는 사람은 열람과 원본 다운로드가 모두 가능합니다.</p>
+
+    <div class="upload-card fade-in">
+      <div class="upload-card-header">
+        <div class="step-badge">1</div>
+        <div class="upload-card-title">앨범 만들기</div>
+      </div>
+      <div class="upload-card-body">
+        <!-- API Key notice -->
+        <div id="api-notice" style="background: rgba(232,213,176,0.08); border: 1px solid rgba(232,213,176,0.15); border-radius: 8px; padding: 14px 16px; margin-bottom: 20px; font-size: 0.82rem; color: var(--text-dim); line-height: 1.5;">
+          📌 이 앱은 <strong style="color: var(--accent)">ImgBB</strong>의 무료 이미지 호스팅을 사용합니다.
+          무료 API 키가 필요합니다 (<a href="https://api.imgbb.com/" target="_blank" style="color: var(--accent2)">api.imgbb.com</a> → 무료 가입 후 발급).
+          <button onclick="showApiModal()" style="margin-left: 8px; background: var(--accent2); color: var(--bg); border: none; border-radius: 4px; padding: 3px 10px; font-size: 0.78rem; cursor: pointer; font-family: 'DM Sans', sans-serif;">키 입력하기</button>
+          <span id="api-status" style="margin-left: 8px;"></span>
+        </div>
+
+        <div class="field">
+          <label>앨범 이름</label>
+          <input type="text" id="album-title-input" placeholder="예: 제주도 여행 2024" maxlength="80">
+        </div>
+
+        <div id="drop-zone">
+          <input type="file" id="file-input" multiple accept="image/*">
+          <div class="drop-icon">🖼️</div>
+          <div class="drop-text"><strong>클릭하거나 드래그</strong>해서 사진을 추가하세요</div>
+          <div class="drop-hint">JPG, PNG, WEBP, GIF · 최대 32MB / 장</div>
+        </div>
+
+        <div id="preview-grid"></div>
+
+        <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
+        <div id="progress-text"></div>
+
+        <div class="upload-actions">
+          <div class="file-count" id="file-count">선택된 파일 없음</div>
+          <button class="btn-primary" id="upload-btn" onclick="startUpload()" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            앨범 생성하기
+          </button>
+        </div>
+
+        <!-- Link result -->
+        <div id="link-result">
+          <div class="link-result-label">✓ 앨범이 생성되었습니다</div>
+          <div class="link-box">
+            <input type="text" id="link-input" readonly>
+            <button class="btn-copy" id="copy-btn" onclick="copyLink()">복사</button>
+          </div>
+          <div class="link-note">이 링크를 공유하면 누구나 사진을 열람하고 다운로드할 수 있습니다.</div>
+          <div style="margin-top: 14px; display: flex; gap: 8px;">
+            <button class="btn-secondary" onclick="viewAlbum(currentAlbumId)">앨범 보기 →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="how-section">
+      <div class="how-title">사용 방법</div>
+      <div class="how-steps">
+        <div class="how-step">
+          <div class="how-step-num">01</div>
+          <div class="how-step-title">사진 업로드</div>
+          <div class="how-step-desc">사진을 드래그하거나 클릭해서 선택. 여러 장도 한 번에 가능.</div>
+        </div>
+        <div class="how-step">
+          <div class="how-step-num">02</div>
+          <div class="how-step-title">링크 생성</div>
+          <div class="how-step-desc">업로드가 끝나면 고유한 공유 링크가 자동으로 생성됩니다.</div>
+        </div>
+        <div class="how-step">
+          <div class="how-step-num">03</div>
+          <div class="how-step-title">공유하기</div>
+          <div class="how-step-desc">링크를 복사해서 카톡, 문자, SNS 어디든 공유하세요.</div>
+        </div>
+        <div class="how-step">
+          <div class="how-step-num">04</div>
+          <div class="how-step-title">열람 · 다운로드</div>
+          <div class="how-step-desc">받는 사람은 로그인 없이 사진 보기와 원본 다운로드 가능.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ────────── ALBUM PAGE ────────── -->
+<div id="page-album">
+  <div class="wrap">
+    <div class="album-header">
+      <button class="album-back" onclick="showHome()">← 홈으로</button>
+      <h1 class="album-title" id="album-display-title">앨범</h1>
+      <div class="album-meta"><span id="album-photo-count">0</span>장의 사진</div>
+      <div class="album-actions">
+        <button class="btn-secondary" onclick="shareAlbum()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          링크 복사
+        </button>
+        <button class="btn-primary" onclick="downloadAll()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          전체 다운로드
+        </button>
+      </div>
+    </div>
+
+    <div class="loading-spinner" id="album-loader"></div>
+    <div id="album-grid"></div>
+
+    <div id="album-error" class="error-state" style="display:none">
+      <h2>앨범을 찾을 수 없습니다</h2>
+      <p>링크가 잘못되었거나 삭제된 앨범입니다.</p>
+      <button class="btn-primary" onclick="showHome()">홈으로 돌아가기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ────────── LIGHTBOX ────────── -->
+<div id="lightbox">
+  <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <button class="lightbox-nav" id="lb-prev" onclick="lightboxNav(-1)">‹</button>
+  <button class="lightbox-nav" id="lb-next" onclick="lightboxNav(1)">›</button>
+  <img id="lightbox-img" src="" alt="">
+  <div class="lightbox-info">
+    <div class="lightbox-name" id="lightbox-name"></div>
+    <a id="lightbox-dl" class="photo-overlay-btn" download>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      원본 다운로드
+    </a>
+  </div>
+</div>
+
+<!-- ────────── API KEY MODAL ────────── -->
+<div id="api-modal">
+  <div class="api-modal-box">
+    <div class="api-modal-title">ImgBB API 키 설정</div>
+    <div class="api-modal-desc">
+      ImgBB는 무료 이미지 호스팅 서비스입니다. 무료 계정을 만들면 API 키를 발급받을 수 있습니다.
+      <br><br>
+      <a href="https://imgbb.com/signup" target="_blank">imgbb.com/signup</a>에서 가입 후 
+      <a href="https://api.imgbb.com/" target="_blank">api.imgbb.com</a>에서 키를 발급하세요.
+    </div>
+    <div class="api-modal-steps">
+      <div class="api-modal-step"><span class="api-modal-step-num">1.</span> <span><a href="https://imgbb.com/signup" target="_blank" style="color: var(--accent2)">imgbb.com/signup</a> 에서 무료 가입</span></div>
+      <div class="api-modal-step"><span class="api-modal-step-num">2.</span> <span><a href="https://api.imgbb.com/" target="_blank" style="color: var(--accent2)">api.imgbb.com</a> 방문 → "Get API key" 클릭</span></div>
+      <div class="api-modal-step"><span class="api-modal-step-num">3.</span> <span>발급된 API 키를 아래에 붙여넣기</span></div>
+    </div>
+    <div class="field">
+      <label>API 키</label>
+      <input type="text" id="api-key-input" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+    </div>
+    <div class="api-modal-actions">
+      <button class="btn-primary" onclick="saveApiKey()">저장하기</button>
+      <button class="btn-secondary" onclick="closeApiModal()">취소</button>
+    </div>
+  </div>
+</div>
+
+<!-- ────────── TOAST ────────── -->
+<div id="toast"></div>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-note">FŌTŌ · 무료 사진 공유 서비스</div>
+    <div class="footer-note">Powered by ImgBB · 로그인 불필요</div>
+  </div>
+</footer>
+
+<script>
+// ──────────────────────────────────────────────
+//  STATE
+// ──────────────────────────────────────────────
+let selectedFiles = [];
+let currentAlbumId = null;
+let currentAlbumPhotos = [];
+let lightboxIndex = 0;
+let IMGBB_API_KEY = localStorage.getItem('imgbb_api_key') || '';
+
+// ──────────────────────────────────────────────
+//  INIT
+// ──────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  checkApiKey();
+  checkUrlForAlbum();
+  setupDragDrop();
+
+  // Keyboard
+  document.addEventListener('keydown', (e) => {
+    if (document.getElementById('lightbox').classList.contains('open')) {
+      if (e.key === 'Escape') closeLightbox();
+      if (e.key === 'ArrowLeft') lightboxNav(-1);
+      if (e.key === 'ArrowRight') lightboxNav(1);
+    }
+  });
+});
+
+function checkApiKey() {
+  const status = document.getElementById('api-status');
+  if (IMGBB_API_KEY) {
+    status.innerHTML = '<span style="color: var(--success)">✓ 키 설정됨</span>';
+  }
+}
+
+// ──────────────────────────────────────────────
+//  URL ROUTING
+// ──────────────────────────────────────────────
+function checkUrlForAlbum() {
+  const hash = window.location.hash;
+  const match = hash.match(/^#album\/(.+)$/);
+  if (match) {
+    loadAlbum(match[1]);
+  }
+}
+
+window.addEventListener('hashchange', () => {
+  checkUrlForAlbum();
+  if (!window.location.hash) showHome();
+});
+
+// ──────────────────────────────────────────────
+//  FILE HANDLING
+// ──────────────────────────────────────────────
+function setupDragDrop() {
+  const zone = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('file-input');
+
+  fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+  // 박스 전체 클릭 → 파일 선택 창 열기
+  zone.addEventListener('click', () => fileInput.click());
+
+  zone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    zone.classList.add('drag-over');
+  });
+  zone.addEventListener('dragleave', (e) => {
+    if (!zone.contains(e.relatedTarget)) zone.classList.remove('drag-over');
+  });
+  zone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    handleFiles(e.dataTransfer.files);
+  });
+}
+
+function handleFiles(files) {
+  const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+  selectedFiles = [...selectedFiles, ...imageFiles];
+  updatePreview();
+}
+
+function updatePreview() {
+  const grid = document.getElementById('preview-grid');
+  const count = document.getElementById('file-count');
+  const btn = document.getElementById('upload-btn');
+
+  count.textContent = selectedFiles.length > 0
+    ? `${selectedFiles.length}장 선택됨`
+    : '선택된 파일 없음';
+
+  btn.disabled = selectedFiles.length === 0 || !IMGBB_API_KEY;
+
+  grid.innerHTML = '';
+  selectedFiles.forEach((file, i) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const item = document.createElement('div');
+      item.className = 'preview-item';
+      item.innerHTML = `
+        <img src="${e.target.result}" alt="${file.name}">
+        <button class="preview-remove" onclick="removeFile(${i})">✕</button>
+        <div class="preview-name">${file.name}</div>
+      `;
+      grid.appendChild(item);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function removeFile(index) {
+  selectedFiles.splice(index, 1);
+  updatePreview();
+}
+
+// ──────────────────────────────────────────────
+//  UPLOAD
+// ──────────────────────────────────────────────
+async function startUpload() {
+  if (!IMGBB_API_KEY) {
+    showApiModal();
+    return;
+  }
+  if (selectedFiles.length === 0) return;
+
+  const title = document.getElementById('album-title-input').value.trim() || '내 앨범';
+  const btn = document.getElementById('upload-btn');
+  const progWrap = document.getElementById('progress-bar-wrap');
+  const progBar = document.getElementById('progress-bar');
+  const progText = document.getElementById('progress-text');
+
+  btn.disabled = true;
+  btn.textContent = '업로드 중...';
+  progWrap.style.display = 'block';
+  progText.style.display = 'block';
+
+  const photos = [];
+  const total = selectedFiles.length;
+
+  for (let i = 0; i < total; i++) {
+    const file = selectedFiles[i];
+    progText.textContent = `업로드 중 ${i + 1} / ${total} — ${file.name}`;
+    progBar.style.width = `${((i) / total) * 100}%`;
+
+    try {
+      const result = await uploadToImgBB(file);
+      photos.push({
+        id: result.data.id,
+        url: result.data.url,
+        display_url: result.data.display_url,
+        thumb: result.data.thumb?.url || result.data.url,
+        name: file.name,
+        size: file.size,
+        width: result.data.width,
+        height: result.data.height,
+      });
+    } catch (err) {
+      showToast(`❌ ${file.name} 업로드 실패: ${err.message}`, 'error');
+    }
+  }
+
+  progBar.style.width = '100%';
+  progText.textContent = '앨범 저장 중...';
+
+  // Save album to localStorage
+  const albumId = generateId();
+  const album = {
+    id: albumId,
+    title,
+    photos,
+    created: Date.now(),
+  };
+
+  // Save in localStorage
+  const albums = JSON.parse(localStorage.getItem('foto_albums') || '{}');
+  albums[albumId] = album;
+  localStorage.setItem('foto_albums', JSON.stringify(albums));
+
+  currentAlbumId = albumId;
+
+  // Show link
+  const albumUrl = `${location.href.split('#')[0]}#album/${albumId}`;
+  document.getElementById('link-input').value = albumUrl;
+  document.getElementById('link-result').style.display = 'block';
+
+  progWrap.style.display = 'none';
+  progText.style.display = 'none';
+  btn.disabled = false;
+  btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> 앨범 생성하기`;
+
+  showToast(`✓ ${photos.length}장 업로드 완료!`, 'success');
+}
+
+async function uploadToImgBB(file) {
+  const formData = new FormData();
+  formData.append('image', file);
+
+  const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `HTTP ${res.status}`);
+  }
+
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error?.message || '업로드 실패');
+  return data;
+}
+
+// ──────────────────────────────────────────────
+//  ALBUM VIEW
+// ──────────────────────────────────────────────
+function loadAlbum(albumId) {
+  const albums = JSON.parse(localStorage.getItem('foto_albums') || '{}');
+  const album = albums[albumId];
+
+  if (!album) {
+    showPage('album');
+    document.getElementById('album-loader').style.display = 'none';
+    document.getElementById('album-error').style.display = 'block';
+    document.getElementById('album-grid').style.display = 'none';
+    return;
+  }
+
+  currentAlbumId = albumId;
+  currentAlbumPhotos = album.photos;
+
+  document.getElementById('album-display-title').textContent = album.title;
+  document.getElementById('album-photo-count').textContent = album.photos.length;
+
+  const grid = document.getElementById('album-grid');
+  grid.innerHTML = '';
+
+  album.photos.forEach((photo, i) => {
+    const card = document.createElement('div');
+    card.className = 'photo-card fade-in';
+    card.style.animationDelay = `${i * 0.05}s`;
+    card.innerHTML = `
+      <img src="${photo.display_url || photo.url}" alt="${photo.name}" loading="lazy" onclick="openLightbox(${i})">
+      <div class="photo-overlay">
+        <button class="photo-overlay-btn" onclick="openLightbox(${i})">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 6s4-6 11-6 11 6 11 6-4 6-11 6-11-6-11-6z"/><circle cx="12" cy="6" r="2"/></svg>
+          크게 보기
+        </button>
+        <a class="photo-overlay-btn" href="${photo.url}" download="${photo.name}" target="_blank">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          다운로드
+        </a>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+
+  showPage('album');
+}
+
+function viewAlbum(albumId) {
+  window.location.hash = `#album/${albumId}`;
+}
+
+// ──────────────────────────────────────────────
+//  LIGHTBOX
+// ──────────────────────────────────────────────
+function openLightbox(index) {
+  lightboxIndex = index;
+  updateLightbox();
+  document.getElementById('lightbox').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function lightboxNav(dir) {
+  lightboxIndex = (lightboxIndex + dir + currentAlbumPhotos.length) % currentAlbumPhotos.length;
+  updateLightbox();
+}
+
+function updateLightbox() {
+  const photo = currentAlbumPhotos[lightboxIndex];
+  const img = document.getElementById('lightbox-img');
+  const name = document.getElementById('lightbox-name');
+  const dl = document.getElementById('lightbox-dl');
+
+  img.src = photo.url;
+  name.textContent = `${photo.name} (${lightboxIndex + 1}/${currentAlbumPhotos.length})`;
+  dl.href = photo.url;
+  dl.setAttribute('download', photo.name);
+}
+
+// ──────────────────────────────────────────────
+//  DOWNLOAD ALL
+// ──────────────────────────────────────────────
+function downloadAll() {
+  if (currentAlbumPhotos.length === 0) return;
+  showToast('📥 각 사진의 다운로드가 시작됩니다...', 'success');
+  currentAlbumPhotos.forEach((photo, i) => {
+    setTimeout(() => {
+      const a = document.createElement('a');
+      a.href = photo.url;
+      a.download = photo.name;
+      a.target = '_blank';
+      a.click();
+    }, i * 300);
+  });
+}
+
+// ──────────────────────────────────────────────
+//  SHARE
+// ──────────────────────────────────────────────
+function shareAlbum() {
+  const url = window.location.href;
+  copyToClipboard(url);
+  showToast('✓ 링크가 복사되었습니다!', 'success');
+}
+
+function copyLink() {
+  const url = document.getElementById('link-input').value;
+  copyToClipboard(url);
+  const btn = document.getElementById('copy-btn');
+  btn.textContent = '✓ 복사됨';
+  btn.classList.add('copied');
+  setTimeout(() => {
+    btn.textContent = '복사';
+    btn.classList.remove('copied');
+  }, 2000);
+}
+
+function copyToClipboard(text) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text);
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+}
+
+// ──────────────────────────────────────────────
+//  API KEY MODAL
+// ──────────────────────────────────────────────
+function showApiModal() {
+  document.getElementById('api-key-input').value = IMGBB_API_KEY;
+  document.getElementById('api-modal').classList.add('open');
+}
+function closeApiModal() {
+  document.getElementById('api-modal').classList.remove('open');
+}
+function saveApiKey() {
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!key) { showToast('API 키를 입력해주세요', 'error'); return; }
+  IMGBB_API_KEY = key;
+  localStorage.setItem('imgbb_api_key', key);
+  closeApiModal();
+  checkApiKey();
+  updatePreview(); // re-enable button if files selected
+  showToast('✓ API 키가 저장되었습니다', 'success');
+}
+
+// ──────────────────────────────────────────────
+//  NAVIGATION
+// ──────────────────────────────────────────────
+function showPage(page) {
+  document.getElementById('page-home').style.display = page === 'home' ? 'block' : 'none';
+  document.getElementById('page-album').style.display = page === 'album' ? 'block' : 'none';
+}
+
+function showHome() {
+  window.location.hash = '';
+  showPage('home');
+}
+
+// ──────────────────────────────────────────────
+//  TOAST
+// ──────────────────────────────────────────────
+function showToast(msg, type = '') {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.className = `${type}`;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2800);
+}
+
+// ──────────────────────────────────────────────
+//  UTILS
+// ──────────────────────────────────────────────
+function generateId() {
+  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
+</script>
+</body>
+</html>
