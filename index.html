@@ -303,14 +303,6 @@
         <div class="upload-card-title">앨범 만들기</div>
       </div>
       <div class="upload-card-body">
-        <!-- ImgBB API Key 안내 -->
-        <div id="api-notice" style="background:rgba(232,213,176,0.08);border:1px solid rgba(232,213,176,0.15);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:0.8rem;color:var(--text-dim);line-height:1.5;">
-          📌 <strong style="color:var(--accent)">ImgBB API 키</strong>가 필요합니다.
-          <a href="https://api.imgbb.com/" target="_blank" style="color:var(--accent2)">api.imgbb.com</a>에서 무료 발급 후 입력하세요.
-          <button onclick="showApiModal()" style="margin-left:6px;background:var(--accent2);color:var(--bg);border:none;border-radius:4px;padding:3px 10px;font-size:0.76rem;cursor:pointer;font-family:'DM Sans',sans-serif;">키 입력</button>
-          <span id="api-status" style="margin-left:6px;"></span>
-        </div>
-
         <div class="field">
           <label>앨범 이름</label>
           <input type="text" id="album-title-input" placeholder="예: 제주도 여행 2024" maxlength="80">
@@ -407,52 +399,29 @@
   </div>
 </div>
 
-<!-- ────────── API KEY MODAL ────────── -->
-<div id="api-modal">
-  <div class="api-modal-box">
-    <div class="api-modal-title">ImgBB API 키 설정</div>
-    <div class="api-modal-desc">
-      ImgBB 무료 계정에서 API 키를 발급받으세요.<br>
-      <a href="https://imgbb.com/signup" target="_blank">imgbb.com/signup</a> 가입 후
-      <a href="https://api.imgbb.com/" target="_blank">api.imgbb.com</a>에서 발급 가능합니다.
-    </div>
-    <div class="api-modal-steps">
-      <div class="api-modal-step"><span class="api-modal-step-num">1.</span><span><a href="https://imgbb.com/signup" target="_blank" style="color:var(--accent2)">imgbb.com/signup</a> 에서 무료 가입</span></div>
-      <div class="api-modal-step"><span class="api-modal-step-num">2.</span><span><a href="https://api.imgbb.com/" target="_blank" style="color:var(--accent2)">api.imgbb.com</a> → "Get API key" 클릭</span></div>
-      <div class="api-modal-step"><span class="api-modal-step-num">3.</span><span>발급된 키를 아래에 붙여넣기</span></div>
-    </div>
-    <div class="field">
-      <label>API 키</label>
-      <input type="text" id="api-key-input" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
-    </div>
-    <div class="api-modal-actions">
-      <button class="btn-primary" onclick="saveApiKey()">저장하기</button>
-      <button class="btn-secondary" onclick="closeApiModal()">취소</button>
-    </div>
-  </div>
-</div>
 
 <div id="toast"></div>
 
 <footer>
   <div class="wrap">
     <div class="footer-note">FŌTŌ · 무료 사진 공유</div>
-    <div class="footer-note">Powered by ImgBB + Supabase</div>
+    <div class="footer-note">Powered by Supabase Storage</div>
   </div>
 </footer>
 
 <script>
 // ══════════════════════════════════════════════
-//  CONFIG
+//  CONFIG — 사용자 설정 불필요
 // ══════════════════════════════════════════════
 const SUPABASE_URL = 'https://xtffznxpjuweqxzshjmq.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_4MmABUR-K36eL-_Qek30BA_yEjxCUPh';
-const WORKER_URL = 'https://shy-union-5e53.leesumin10092.workers.dev/'; // Cloudflare Worker 주소로 교체
+const STORAGE_BUCKET = 'photos';
 
 // ══════════════════════════════════════════════
-//  SUPABASE
+//  SUPABASE 헬퍼
 // ══════════════════════════════════════════════
 const sb = {
+  // DB insert
   async insert(table, data) {
     const res = await fetch(SUPABASE_URL + '/rest/v1/' + table, {
       method: 'POST',
@@ -467,6 +436,7 @@ const sb = {
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
+  // DB select
   async select(table, id) {
     const res = await fetch(SUPABASE_URL + '/rest/v1/' + table + '?id=eq.' + id + '&select=*', {
       headers: {
@@ -477,6 +447,26 @@ const sb = {
     if (!res.ok) throw new Error(await res.text());
     const rows = await res.json();
     return rows[0] || null;
+  },
+  // Storage에 원본 파일 업로드
+  async uploadFile(path, file) {
+    const res = await fetch(SUPABASE_URL + '/storage/v1/object/' + STORAGE_BUCKET + '/' + path, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+        'Content-Type': file.type,
+        'x-upsert': 'true'
+      },
+      body: file
+    });
+    if (!res.ok) throw new Error(await res.text());
+    // 공개 URL
+    return SUPABASE_URL + '/storage/v1/object/public/' + STORAGE_BUCKET + '/' + path;
+  },
+  // 강제 다운로드 URL
+  downloadUrl(path) {
+    return SUPABASE_URL + '/storage/v1/object/' + STORAGE_BUCKET + '/' + path + '?download=';
   }
 };
 
@@ -487,18 +477,15 @@ let selectedFiles = [];
 let currentAlbumId = null;
 let currentAlbumPhotos = [];
 let lightboxIndex = 0;
-let IMGBB_API_KEY = localStorage.getItem('imgbb_api_key') || '';
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
 // ══════════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', function() {
-  checkApiKey();
   checkUrlForAlbum();
   setupDragDrop();
   setupLightboxSwipe();
-
   document.addEventListener('keydown', function(e) {
     if (!document.getElementById('lightbox').classList.contains('open')) return;
     if (e.key === 'Escape') closeLightbox();
@@ -507,35 +494,17 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 
-function checkApiKey() {
-  var status = document.getElementById('api-status');
-  if (IMGBB_API_KEY) {
-    status.innerHTML = '<span style="color:var(--success)">✓ 설정됨</span>';
-  }
-}
-
 // ══════════════════════════════════════════════
 //  ROUTING
 // ══════════════════════════════════════════════
 function checkUrlForAlbum() {
   var hash = window.location.hash;
   var match = hash.match(/^#album\/([a-zA-Z0-9_-]+)$/);
-  if (match) {
-    loadAlbumFromSupabase(match[1]);
-    return;
-  }
-  var dataMatch = hash.match(/^#data\/(.+)$/);
-  if (dataMatch) {
-    try {
-      var album = JSON.parse(decodeURIComponent(escape(atob(dataMatch[1]))));
-      renderAlbum(album);
-    } catch(e) { showAlbumError(); }
-  }
+  if (match) { loadAlbumFromSupabase(match[1]); }
 }
 
 window.addEventListener('hashchange', function() {
-  var hash = window.location.hash;
-  if (!hash) { showPage('home'); return; }
+  if (!window.location.hash) { showPage('home'); return; }
   checkUrlForAlbum();
 });
 
@@ -545,7 +514,6 @@ window.addEventListener('hashchange', function() {
 function setupDragDrop() {
   var zone = document.getElementById('drop-zone');
   var fileInput = document.getElementById('file-input');
-
   fileInput.addEventListener('change', function(e) { handleFiles(e.target.files); });
   zone.addEventListener('click', function() { fileInput.click(); });
   zone.addEventListener('dragover', function(e) { e.preventDefault(); zone.classList.add('drag-over'); });
@@ -563,10 +531,8 @@ function updatePreview() {
   var grid = document.getElementById('preview-grid');
   var count = document.getElementById('file-count');
   var btn = document.getElementById('upload-btn');
-
   count.textContent = selectedFiles.length > 0 ? selectedFiles.length + '장 선택됨' : '선택된 파일 없음';
-  btn.disabled = selectedFiles.length === 0 || !IMGBB_API_KEY;
-
+  btn.disabled = selectedFiles.length === 0;
   grid.innerHTML = '';
   selectedFiles.forEach(function(file, i) {
     var reader = new FileReader();
@@ -575,15 +541,15 @@ function updatePreview() {
       item.className = 'preview-item';
       var img = document.createElement('img');
       img.src = e.target.result;
-      var btn = document.createElement('button');
-      btn.className = 'preview-remove';
-      btn.textContent = '✕';
-      btn.onclick = function() { removeFile(i); };
+      var removeBtn = document.createElement('button');
+      removeBtn.className = 'preview-remove';
+      removeBtn.textContent = '✕';
+      removeBtn.onclick = function() { removeFile(i); };
       var nameDiv = document.createElement('div');
       nameDiv.className = 'preview-name';
       nameDiv.textContent = file.name;
       item.appendChild(img);
-      item.appendChild(btn);
+      item.appendChild(removeBtn);
       item.appendChild(nameDiv);
       grid.appendChild(item);
     };
@@ -597,10 +563,9 @@ function removeFile(index) {
 }
 
 // ══════════════════════════════════════════════
-//  UPLOAD
+//  UPLOAD — Supabase Storage에 원본 저장
 // ══════════════════════════════════════════════
 async function startUpload() {
-  if (!IMGBB_API_KEY) { showApiModal(); return; }
   if (selectedFiles.length === 0) return;
 
   var title = document.getElementById('album-title-input').value.trim() || '내 앨범';
@@ -614,6 +579,7 @@ async function startUpload() {
   progWrap.style.display = 'block';
   progText.style.display = 'block';
 
+  var albumId = generateId();
   var photos = [];
   var total = selectedFiles.length;
 
@@ -622,16 +588,15 @@ async function startUpload() {
     progText.textContent = '업로드 중 ' + (i+1) + ' / ' + total + ' — ' + file.name;
     progBar.style.width = ((i / total) * 100) + '%';
     try {
-      var result = await uploadToImgBB(file);
+      // 경로: albumId/파일명 으로 원본 그대로 저장
+      var filePath = albumId + '/' + file.name;
+      var publicUrl = await sb.uploadFile(filePath, file);
       photos.push({
-        id: result.data.id,
-        url: result.data.url,
-        display_url: result.data.display_url,
-        thumb: (result.data.thumb && result.data.thumb.url) || result.data.url,
+        path: filePath,
+        url: publicUrl,
         name: file.name,
         size: file.size,
-        width: result.data.width,
-        height: result.data.height
+        type: file.type
       });
     } catch(err) {
       showToast('❌ ' + file.name + ' 실패: ' + err.message, 'error');
@@ -642,7 +607,6 @@ async function startUpload() {
   progText.textContent = '앨범 저장 중...';
 
   try {
-    var albumId = generateId();
     await sb.insert('albums', {
       id: albumId,
       title: title,
@@ -655,30 +619,13 @@ async function startUpload() {
     document.getElementById('link-result').style.display = 'block';
     showToast('✓ ' + photos.length + '장 업로드 완료!', 'success');
   } catch(err) {
-    var albumId = generateId();
-    var album = { id: albumId, title: title, photos: photos, created: Date.now() };
-    var encoded = btoa(unescape(encodeURIComponent(JSON.stringify(album))));
-    currentAlbumId = albumId;
-    var albumUrl = location.origin + location.pathname + '#data/' + encoded;
-    document.getElementById('link-input').value = albumUrl;
-    document.getElementById('link-result').style.display = 'block';
-    showToast('✓ ' + photos.length + '장 업로드 완료!', 'success');
+    showToast('❌ 앨범 저장 실패: ' + err.message, 'error');
   }
 
   progWrap.style.display = 'none';
   progText.style.display = 'none';
   btn.disabled = false;
   btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> 앨범 생성하기';
-}
-
-async function uploadToImgBB(file) {
-  var formData = new FormData();
-  formData.append('image', file);
-  var res = await fetch('https://api.imgbb.com/1/upload?key=' + IMGBB_API_KEY, { method: 'POST', body: formData });
-  if (!res.ok) { var e = await res.json().catch(function(){return {};}); throw new Error((e.error && e.error.message) || 'HTTP ' + res.status); }
-  var data = await res.json();
-  if (!data.success) throw new Error((data.error && data.error.message) || '업로드 실패');
-  return data;
 }
 
 // ══════════════════════════════════════════════
@@ -689,7 +636,6 @@ async function loadAlbumFromSupabase(albumId) {
   document.getElementById('album-loader').style.display = 'block';
   document.getElementById('album-grid').style.display = 'none';
   document.getElementById('album-error').style.display = 'none';
-
   try {
     var row = await sb.select('albums', albumId);
     if (!row) { showAlbumError(); return; }
@@ -717,7 +663,6 @@ function showAlbumError() {
 function renderAlbum(album) {
   currentAlbumId = album.id;
   currentAlbumPhotos = album.photos;
-
   document.getElementById('album-display-title').textContent = album.title;
   document.getElementById('album-photo-count').textContent = album.photos.length;
   document.getElementById('album-error').style.display = 'none';
@@ -732,7 +677,7 @@ function renderAlbum(album) {
     card.style.animationDelay = (i * 0.04) + 's';
 
     var img = document.createElement('img');
-    img.src = photo.display_url || photo.url;
+    img.src = photo.url;
     img.alt = photo.name;
     img.loading = 'lazy';
     img.onclick = function() { openLightbox(i); };
@@ -740,34 +685,16 @@ function renderAlbum(album) {
     // 데스크탑 오버레이
     var overlay = document.createElement('div');
     overlay.className = 'photo-overlay';
-
-    var viewBtn = document.createElement('button');
-    viewBtn.className = 'photo-overlay-btn';
-    viewBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 6s4-6 11-6 11 6 11 6-4 6-11 6-11-6-11-6z"/><circle cx="12" cy="6" r="2"/></svg>크게 보기';
-    viewBtn.onclick = function() { openLightbox(i); };
-
-    var dlBtn = document.createElement('button');
-    dlBtn.className = 'photo-overlay-btn';
-    dlBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>다운로드';
-    dlBtn.onclick = function() { downloadPhoto(photo.url, photo.name); };
-
+    var viewBtn = makeBtn('크게 보기', function() { openLightbox(i); });
+    var dlBtn = makeBtn('다운로드', function() { downloadPhoto(photo); });
     overlay.appendChild(viewBtn);
     overlay.appendChild(dlBtn);
 
-    // 모바일 바
+    // 모바일 바 (항상 표시)
     var mobileBar = document.createElement('div');
     mobileBar.className = 'photo-mobile-bar';
-
-    var mViewBtn = document.createElement('button');
-    mViewBtn.className = 'photo-overlay-btn';
-    mViewBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 6s4-6 11-6 11 6 11 6-4 6-11 6-11-6-11-6z"/><circle cx="12" cy="6" r="2"/></svg>보기';
-    mViewBtn.onclick = function() { openLightbox(i); };
-
-    var mDlBtn = document.createElement('button');
-    mDlBtn.className = 'photo-overlay-btn';
-    mDlBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>저장';
-    mDlBtn.onclick = function() { downloadPhoto(photo.url, photo.name); };
-
+    var mViewBtn = makeBtn('보기', function() { openLightbox(i); });
+    var mDlBtn = makeBtn('저장', function() { downloadPhoto(photo); });
     mobileBar.appendChild(mViewBtn);
     mobileBar.appendChild(mDlBtn);
 
@@ -778,6 +705,14 @@ function renderAlbum(album) {
   });
 
   showPage('album');
+}
+
+function makeBtn(label, onClick) {
+  var btn = document.createElement('button');
+  btn.className = 'photo-overlay-btn';
+  btn.textContent = label;
+  btn.onclick = onClick;
+  return btn;
 }
 
 function goToCurrentAlbum() {
@@ -813,8 +748,7 @@ function updateLightbox() {
 }
 
 function downloadCurrent() {
-  var photo = currentAlbumPhotos[lightboxIndex];
-  downloadPhoto(photo.url, photo.name);
+  downloadPhoto(currentAlbumPhotos[lightboxIndex]);
 }
 
 function setupLightboxSwipe() {
@@ -828,98 +762,39 @@ function setupLightboxSwipe() {
 }
 
 // ══════════════════════════════════════════════
-//  DOWNLOAD
+//  DOWNLOAD — Supabase Storage 강제 다운로드
 // ══════════════════════════════════════════════
-async function downloadPhoto(url, name) {
+async function downloadPhoto(photo) {
   showToast('📥 다운로드 중...', '');
-
-  // 1) Cloudflare Worker 프록시 (모바일 포함 진짜 다운로드)
-  if (WORKER_URL && WORKER_URL !== 'YOUR_WORKER_URL') {
-    try {
-      var proxyUrl = WORKER_URL + '?url=' + encodeURIComponent(url) + '&name=' + encodeURIComponent(name);
-      var res = await fetch(proxyUrl);
-      if (!res.ok) throw new Error('프록시 실패');
-      var blob = await res.blob();
-      var blobUrl = URL.createObjectURL(blob);
-      var a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = name;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(function() { URL.revokeObjectURL(blobUrl); }, 2000);
-      showToast('✓ 저장되었습니다', 'success');
-      return;
-    } catch(e) {}
-  }
-
-  // 2) 직접 fetch (PC에서 주로 동작)
   try {
-    var res = await fetch(url, { mode: 'cors' });
-    if (!res.ok) throw new Error();
+    // Supabase Storage의 ?download= 파라미터로 강제 다운로드
+    var dlUrl = sb.downloadUrl(photo.path) + encodeURIComponent(photo.name);
+    var res = await fetch(dlUrl, {
+      headers: { 'apikey': SUPABASE_ANON_KEY }
+    });
+    if (!res.ok) throw new Error('다운로드 실패');
     var blob = await res.blob();
     var blobUrl = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = blobUrl;
-    a.download = name;
+    a.download = photo.name;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     setTimeout(function() { URL.revokeObjectURL(blobUrl); }, 2000);
     showToast('✓ 저장되었습니다', 'success');
-    return;
-  } catch(e) {}
-
-  // 3) 모바일 fallback — 전체화면 오버레이에서 길게 눌러 저장
-  showMobileDownloadGuide(url, name);
-}
-
-function showMobileDownloadGuide(url, name) {
-  var existing = document.getElementById('dl-guide');
-  if (existing) existing.remove();
-
-  var overlay = document.createElement('div');
-  overlay.id = 'dl-guide';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.96);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:0;';
-
-  var topBar = document.createElement('div');
-  topBar.style.cssText = 'width:100%;background:rgba(232,213,176,0.12);border-bottom:1px solid rgba(232,213,176,0.2);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;';
-
-  var hint = document.createElement('span');
-  hint.style.cssText = 'font-family:DM Sans,sans-serif;color:#e8d5b0;font-size:0.88rem;font-weight:500;';
-  hint.textContent = '사진을 길게 눌러서 저장하세요';
-
-  var closeBtn = document.createElement('button');
-  closeBtn.style.cssText = 'background:none;border:1px solid rgba(255,255,255,0.2);color:#f0ece4;border-radius:6px;padding:6px 14px;font-family:DM Sans,sans-serif;font-size:0.8rem;cursor:pointer;';
-  closeBtn.textContent = '닫기';
-  closeBtn.onclick = function() { document.getElementById('dl-guide').remove(); };
-
-  topBar.appendChild(hint);
-  topBar.appendChild(closeBtn);
-
-  var imgWrap = document.createElement('div');
-  imgWrap.style.cssText = 'flex:1;display:flex;align-items:center;justify-content:center;width:100%;padding:16px;';
-
-  var photoImg = document.createElement('img');
-  photoImg.src = url;
-  photoImg.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;';
-  imgWrap.appendChild(photoImg);
-
-  var bottomBar = document.createElement('div');
-  bottomBar.style.cssText = 'width:100%;padding:16px 20px;text-align:center;flex-shrink:0;';
-  bottomBar.innerHTML = '<div style="font-family:DM Sans,sans-serif;color:#8a8680;font-size:0.8rem;">iOS: 길게 누르기 → <strong style="color:#e8d5b0">사진 저장</strong> &nbsp;|&nbsp; Android: 길게 누르기 → <strong style="color:#e8d5b0">이미지 저장</strong></div>';
-
-  overlay.appendChild(topBar);
-  overlay.appendChild(imgWrap);
-  overlay.appendChild(bottomBar);
-  document.body.appendChild(overlay);
+  } catch(e) {
+    // fallback: 공개 URL로 새 탭
+    window.open(photo.url, '_blank');
+    showToast('📱 열린 사진을 길게 눌러 저장하세요', '');
+  }
 }
 
 function downloadAll() {
   if (currentAlbumPhotos.length === 0) return;
   showToast('📥 전체 다운로드를 시작합니다...', 'success');
   currentAlbumPhotos.forEach(function(photo, i) {
-    setTimeout(function() { downloadPhoto(photo.url, photo.name); }, i * 800);
+    setTimeout(function() { downloadPhoto(photo); }, i * 800);
   });
 }
 
@@ -957,25 +832,6 @@ function copyToClipboard(text) {
 }
 
 // ══════════════════════════════════════════════
-//  API KEY MODAL
-// ══════════════════════════════════════════════
-function showApiModal() {
-  document.getElementById('api-key-input').value = IMGBB_API_KEY;
-  document.getElementById('api-modal').classList.add('open');
-}
-function closeApiModal() { document.getElementById('api-modal').classList.remove('open'); }
-function saveApiKey() {
-  var key = document.getElementById('api-key-input').value.trim();
-  if (!key) { showToast('API 키를 입력해주세요', 'error'); return; }
-  IMGBB_API_KEY = key;
-  localStorage.setItem('imgbb_api_key', key);
-  closeApiModal();
-  checkApiKey();
-  updatePreview();
-  showToast('✓ API 키가 저장되었습니다', 'success');
-}
-
-// ══════════════════════════════════════════════
 //  NAVIGATION
 // ══════════════════════════════════════════════
 function showPage(page) {
@@ -1001,9 +857,6 @@ function showToast(msg, type) {
   toast._t = setTimeout(function() { toast.classList.remove('show'); }, 3000);
 }
 
-// ══════════════════════════════════════════════
-//  UTILS
-// ══════════════════════════════════════════════
 function generateId() {
   return Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
 }
