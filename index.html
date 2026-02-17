@@ -679,10 +679,10 @@
   <img id="lightbox-img" src="" alt="">
   <div class="lightbox-info">
     <div class="lightbox-name" id="lightbox-name"></div>
-    <a id="lightbox-dl" class="photo-overlay-btn" download>
+    <button id="lightbox-dl" class="photo-overlay-btn" onclick="downloadPhoto(currentAlbumPhotos[lightboxIndex].url, currentAlbumPhotos[lightboxIndex].name)">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       원본 다운로드
-    </a>
+    </button>
   </div>
 </div>
 
@@ -762,6 +762,24 @@ function checkApiKey() {
 // ──────────────────────────────────────────────
 function checkUrlForAlbum() {
   const hash = window.location.hash;
+  // URL 인코딩된 앨범 데이터 방식 (공유 링크)
+  const dataMatch = hash.match(/^#data\/(.+)$/);
+  if (dataMatch) {
+    try {
+      const album = JSON.parse(decodeURIComponent(escape(atob(dataMatch[1]))));
+      // localStorage에 없으면 저장
+      const albums = JSON.parse(localStorage.getItem('foto_albums') || '{}');
+      if (!albums[album.id]) {
+        albums[album.id] = album;
+        localStorage.setItem('foto_albums', JSON.stringify(albums));
+      }
+      renderAlbum(album);
+    } catch(e) {
+      showAlbumError();
+    }
+    return;
+  }
+  // 기존 #album/ 방식 (하위 호환)
   const match = hash.match(/^#album\/(.+)$/);
   if (match) {
     loadAlbum(match[1]);
@@ -887,7 +905,6 @@ async function startUpload() {
   progBar.style.width = '100%';
   progText.textContent = '앨범 저장 중...';
 
-  // Save album to localStorage
   const albumId = generateId();
   const album = {
     id: albumId,
@@ -896,15 +913,16 @@ async function startUpload() {
     created: Date.now(),
   };
 
-  // Save in localStorage
+  // localStorage에도 저장 (내 기기용 백업)
   const albums = JSON.parse(localStorage.getItem('foto_albums') || '{}');
   albums[albumId] = album;
   localStorage.setItem('foto_albums', JSON.stringify(albums));
 
   currentAlbumId = albumId;
 
-  // Show link
-  const albumUrl = `${location.href.split('#')[0]}#album/${albumId}`;
+  // 앨범 데이터를 URL에 직접 인코딩 → 공유받은 사람도 열 수 있음
+  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(album))));
+  const albumUrl = `${location.href.split('#')[0]}#data/${encoded}`;
   document.getElementById('link-input').value = albumUrl;
   document.getElementById('link-result').style.display = 'block';
 
@@ -941,22 +959,27 @@ async function uploadToImgBB(file) {
 function loadAlbum(albumId) {
   const albums = JSON.parse(localStorage.getItem('foto_albums') || '{}');
   const album = albums[albumId];
+  if (!album) { showAlbumError(); return; }
+  renderAlbum(album);
+}
 
-  if (!album) {
-    showPage('album');
-    document.getElementById('album-loader').style.display = 'none';
-    document.getElementById('album-error').style.display = 'block';
-    document.getElementById('album-grid').style.display = 'none';
-    return;
-  }
+function showAlbumError() {
+  showPage('album');
+  document.getElementById('album-loader').style.display = 'none';
+  document.getElementById('album-error').style.display = 'block';
+  document.getElementById('album-grid').style.display = 'none';
+}
 
-  currentAlbumId = albumId;
+function renderAlbum(album) {
+  currentAlbumId = album.id;
   currentAlbumPhotos = album.photos;
 
   document.getElementById('album-display-title').textContent = album.title;
   document.getElementById('album-photo-count').textContent = album.photos.length;
+  document.getElementById('album-error').style.display = 'none';
 
   const grid = document.getElementById('album-grid');
+  grid.style.display = '';
   grid.innerHTML = '';
 
   album.photos.forEach((photo, i) => {
@@ -970,10 +993,10 @@ function loadAlbum(albumId) {
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 6s4-6 11-6 11 6 11 6-4 6-11 6-11-6-11-6z"/><circle cx="12" cy="6" r="2"/></svg>
           크게 보기
         </button>
-        <a class="photo-overlay-btn" href="${photo.url}" download="${photo.name}" target="_blank">
+        <button class="photo-overlay-btn" onclick="downloadPhoto('${photo.url}', '${photo.name}')">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           다운로드
-        </a>
+        </button>
       </div>
     `;
     grid.appendChild(card);
@@ -1014,24 +1037,34 @@ function updateLightbox() {
 
   img.src = photo.url;
   name.textContent = `${photo.name} (${lightboxIndex + 1}/${currentAlbumPhotos.length})`;
-  dl.href = photo.url;
-  dl.setAttribute('download', photo.name);
+  // 다운로드는 onclick에서 직접 처리
 }
 
 // ──────────────────────────────────────────────
 //  DOWNLOAD ALL
 // ──────────────────────────────────────────────
+async function downloadPhoto(url, name) {
+  try {
+    showToast('📥 다운로드 중...', '');
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+  } catch(e) {
+    // fetch 실패 시 새 탭으로 fallback
+    window.open(url, '_blank');
+  }
+}
+
 function downloadAll() {
   if (currentAlbumPhotos.length === 0) return;
-  showToast('📥 각 사진의 다운로드가 시작됩니다...', 'success');
+  showToast('📥 전체 다운로드를 시작합니다...', 'success');
   currentAlbumPhotos.forEach((photo, i) => {
-    setTimeout(() => {
-      const a = document.createElement('a');
-      a.href = photo.url;
-      a.download = photo.name;
-      a.target = '_blank';
-      a.click();
-    }, i * 300);
+    setTimeout(() => downloadPhoto(photo.url, photo.name), i * 600);
   });
 }
 
