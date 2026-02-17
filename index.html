@@ -588,8 +588,10 @@ async function startUpload() {
     progText.textContent = '업로드 중 ' + (i+1) + ' / ' + total + ' — ' + file.name;
     progBar.style.width = ((i / total) * 100) + '%';
     try {
-      // 경로: albumId/파일명 으로 원본 그대로 저장
-      var filePath = albumId + '/' + file.name;
+      // 한글/특수문자/공백 있으면 Supabase가 거부하므로 안전한 이름으로 변환
+      var ext = file.name.split('.').pop().toLowerCase();
+      var safeName = i + '_' + Date.now() + '.' + ext;
+      var filePath = albumId + '/' + safeName;
       var publicUrl = await sb.uploadFile(filePath, file);
       photos.push({
         path: filePath,
